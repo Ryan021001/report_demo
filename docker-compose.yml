@@ -1,0 +1,46 @@
+version: '3.2'
+
+services:
+  api_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: api_ser
+    # depends_on:
+    #   - db
+    #   - cache
+    ports:
+      - "3000:3000"
+    networks:
+      - nest-application
+    # environment:
+    #   DB_HOST: mysql-docker-nest
+    #   REDIS_HOST: ${REDIS_HOST}
+    #   REDIS_PORT: ${REDIS_PORT}
+    #   REDIS_PASSWORD: eYVX7EwVmmxKPCDmwMtyKVge8oLd4123
+    working_dir: /usr/src/app
+  # cache:
+  #   image: redis:6.2-alpine
+  #   restart: always
+  #   ports:
+  #     - '6379:6379'
+  #   command: redis-server --save 20 1 --loglevel warning --requirepass eYVX7EwVmmxKPCDmwMtyKVge8oLd4123
+  #   volumes: 
+  #     - cache:/data
+  # db:
+  #   image: mysql:latest
+  #   container_name: mysql-docker-nest
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: ${DB_PASS}
+  #     MYSQL_DATABASE: ${DB_DATABASE}
+  #   restart: unless-stopped
+  #   ports:
+  #     - '3306:3306'
+  #   networks:
+  #     - nest-application
+volumes:
+  cache:
+    driver: local
+networks:
+  nest-application:
+    driver: bridge
