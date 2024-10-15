@@ -1,28 +1,32 @@
-# Use a more specific base image
-FROM node:18-slim
-
-RUN npm i -g @nestjs/cli typescript ts-node
+# Stage 1: Build stage
+FROM node:18 as builder
 
 # Set the working directory
 WORKDIR /usr/src/app
 
-# Copy package.json and package-lock.json
+# Copy package.json and install dependencies
 COPY package*.json ./
+RUN npm install
 
-# Install dependencies
-RUN npm ci --only=production
-
-# Copy source files
+# Copy the source code and build it
 COPY . .
-
-# Build the application
 RUN npm run build
 
-# Remove development dependencies
-RUN npm prune --production
+# Stage 2: Production stage
+FROM node:18-slim
 
-# Use a non-root user
-USER node
+# Set the working directory
+WORKDIR /usr/src/app
 
-# Start the server
-CMD [ "node", "dist/main.js" ]
+# Copy only the built files from the previous stage
+COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/package*.json ./
+
+# Copy the .env file
+COPY .env ./
+
+# Install only production dependencies
+RUN npm install --only=production
+
+# Expose port and start the application
+CMD ["node", "dist/main.js"]
