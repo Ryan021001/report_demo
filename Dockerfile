@@ -1,20 +1,26 @@
-# Base image
-FROM node:18
+# Use a more specific base image
+FROM node:18-slim
 
-# Create app directory
+# Set the working directory
 WORKDIR /usr/src/app
 
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
+# Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Install app dependencies
-RUN npm install
+# Install dependencies
+RUN npm ci --only=production
 
-# Bundle app source
+# Copy source files
 COPY . .
 
-# Creates a "dist" folder with the production build
+# Build the application
 RUN npm run build
 
-# Start the server using the production build
+# Remove development dependencies
+RUN npm prune --production
+
+# Use a non-root user
+USER node
+
+# Start the server
 CMD [ "node", "dist/main.js" ]
