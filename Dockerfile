@@ -1,6 +1,8 @@
 # Use a more specific base image
 FROM node:18-slim
 
+RUN npm i -g @nestjs/cli typescript ts-node
+
 # Set the working directory
 WORKDIR /usr/src/app
 
