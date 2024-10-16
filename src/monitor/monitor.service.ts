@@ -11,7 +11,11 @@ export class MonitorService {
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async checkEmailsAndNotify(monitorData: MonitorDto): Promise<void> {
-    // await this.gmailService.readUnreadEmails(monitorData?.keywords);
     await this.gmailService.checkEmailsAndNotify(monitorData?.keywords);
+  }
+
+  @Cron('0 12 * * *')
+  async checkEmailConnection(): Promise<void> {
+    await this.gmailService.checkEmailConnection();
   }
 }

@@ -65,8 +65,7 @@ export class GmailService {
 
   async refreshAccessToken() {
     await this.oauthClient.setCredentials({
-      refresh_token:
-        '1//04B2mAINJ2yG3CgYIARAAGAQSNwF-L9Irh0zICdsrDIpnT8N310y6_X4uf4hrbuXGre11-0IYJjS0KylFHpMkAmA0wWrpmCQKIUc',
+      refresh_token: googleConfig.refreshToken,
     });
     try {
       const tokenResponse = await this.oauthClient.refreshAccessToken();
@@ -81,53 +80,120 @@ export class GmailService {
     }
   }
 
-  async checkEmailsAndNotify(keywords: string[] = ['on']): Promise<void> {
-    const token =
-      'ya29.a0AcM612x3Qe-m7SSL_Iki8N9sHdzqưeqweqwr3adadiWqưdqwdqwwhSZYcsCsyttUx1hvwSLnO_aZgDkaae901W-_lsRQS8rEQtoeOmWXXGf7z94U0n2MRQ8Ym_ADs9CfE45Ja4hQOqQtOiD1Wk9C6mKYEbgUxOhcPrc0Zm9V1MganOEbZaVEO971FO_uaCgYKAYoSARASFQHGX2MiAOxXffNxauC-hR_AGZtdkQ0175';
-    await this.oauthClient.setCredentials({
-      access_token: token,
-    });
-
+  async checkEmailConnection() {
     try {
-      await this.oauthClient.getTokenInfo(token);
-    } catch (e) {
-      if (e) {
-        console.log('Access token expired or invalid, refreshing token...');
-        const newAccessToken = await this.refreshAccessToken();
-        this.oauthClient.setCredentials({
-          access_token: newAccessToken,
-        });
-      }
-    }
-    // const userInfoClient = google.oauth2('v2').userinfo;
-    const gmailClient = google.gmail({ version: 'v1', auth: this.oauthClient });
+      const accessToken = await this.refreshAccessToken();
 
+      if (accessToken) {
+        await this.discordService.sendNotification(
+          '@everyone ✅ Gmail system check at 12:00: The system is connected and working properly.',
+        );
+      } else {
+        await this.discordService.sendNotification(
+          '@everyone ⚠️ Gmail system check at 12:00: Unable to connect to Gmail.',
+        );
+      }
+    } catch (error) {
+      await this.discordService.sendNotification(
+        `@everyone ❌ Gmail system check at 12:00: Error connecting to Gmail - ${error.message}`,
+      );
+    }
+  }
+
+  private async authenticate() {
+    try {
+      const token = googleConfig.accessToken;
+      await this.oauthClient.getTokenInfo(token);
+      await this.oauthClient.setCredentials({
+        access_token: token,
+      });
+    } catch {
+      console.log('Access token expired or invalid, refreshing token...');
+      const newAccessToken = await this.refreshAccessToken();
+      this.oauthClient.setCredentials({
+        access_token: newAccessToken,
+      });
+    }
+  }
+
+  private async getUnreadEmails(gmailClient: any, keywords: string[]) {
+    const query = `is:unread ${keywords.map((keyword) => `subject:"${keyword}"`).join(' OR ')}`;
     const res = await gmailClient.users.messages.list({
       userId: 'me',
       maxResults: 10,
-      q: 'is:unread',
+      q: query,
     });
-    const messages = res.data.messages || [];
-    // Loop through the messages and get the full content of each email
-    for (const message of messages) {
-      const messageDetail = await gmailClient.users.messages.get({
-        userId: 'me',
-        id: message.id,
-      });
 
-      const payload = messageDetail.data.payload;
-      if (payload.headers) {
-        const subjectHeader = payload.headers.find(
-          (header) => header.name === 'Subject',
-        );
-        if (
-          keywords.some((keyword) => subjectHeader.value?.includes(keyword))
-        ) {
-          await this.discordService.sendNotification(
-            `@everyone New email with subject: ${subjectHeader.value}`,
-          );
-          return;
-        }
+    return res.data.messages || [];
+  }
+
+  private async checkEmailContent(
+    gmailClient: any,
+    messageId: string,
+    keywords: string[],
+  ): Promise<boolean | string> {
+    const messageDetail = await gmailClient.users.messages.get({
+      userId: 'me',
+      id: messageId,
+    });
+
+    const payload = messageDetail.data.payload;
+    if (payload.headers) {
+      const subjectHeader = payload.headers.find(
+        (header) => header.name === 'Subject',
+      );
+      const bodyPart = payload.parts?.find(
+        (part) => part.mimeType === 'text/plain',
+      )?.body?.data;
+      const body = bodyPart ? Buffer.from(bodyPart, 'base64').toString() : null;
+
+      // Check if subject contains any of the keywords and if the body includes the specific text
+      if (
+        subjectHeader &&
+        keywords.some((keyword) => subjectHeader.value.includes(keyword)) &&
+        body?.includes('com.app.test.limit')
+      ) {
+        console.log('Sending notification');
+        return subjectHeader.value;
+      }
+    }
+    return false;
+  }
+
+  private async sendMultipleNotifications(subject: string) {
+    for (let i = 0; i < 3; i++) {
+      await this.discordService.sendNotification(
+        `@everyone Email subject: ${subject} error`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+  }
+
+  async checkEmailsAndNotify(
+    keywords: string[] = ['admob test limit'],
+  ): Promise<void> {
+    // Authenticate OAuth credentials
+    await this.authenticate();
+
+    // Initialize Gmail client
+    const gmailClient = google.gmail({ version: 'v1', auth: this.oauthClient });
+
+    // Fetch the list of unread emails
+    const messages = await this.getUnreadEmails(gmailClient, keywords);
+
+    // Loop through each email and check for matching keywords
+    for (const message of messages) {
+      const content = await this.checkEmailContent(
+        gmailClient,
+        message.id,
+        keywords,
+      );
+
+      // If a matching email is found, send notifications to Discord
+      if (content) {
+        // Send 3 notifications with a 5-second delay between each
+        await this.sendMultipleNotifications(content as string);
+        return;
       }
     }
   }

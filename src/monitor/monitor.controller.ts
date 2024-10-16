@@ -14,6 +14,7 @@ export class MonitorController {
   @Post('/notify')
   async checkEmailsAndNotify(@Body() tokenData: MonitorDto) {
     await this.monitorService.checkEmailsAndNotify(tokenData);
+    await this.monitorService.checkEmailConnection();
     return {
       statusCode: HttpStatus.OK,
       message: 'success',
